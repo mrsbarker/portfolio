@@ -1,4 +1,4 @@
-# Welcome, it's Brittany B :wave:
+# Welcome :wave: it's Brittany B..
 
 ### And this is my portfolio!
 Repository includes projects showcasing my data analytics and engineering skills as well as coding ability. 
