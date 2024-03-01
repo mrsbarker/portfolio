@@ -6,7 +6,7 @@ import pandas as pd
 
 def dict_to_csv(filename, aList):
         '''
-        dictt_to_csv converts a list of list to a comma separated values file
+        dict_to_csv converts a list of list to a comma separated values file
         :param filename: string representing desired filename with extension .csv
         :param aList: list of lists representing dataframe to be converted
         :return: None
