@@ -5,7 +5,7 @@ Repository includes projects showcasing my data analytics and engineering skills
 
 ### Table of Contents
 + ETL Pipelines
-  + Battle Bots 
+  + BattleBots 
   + HBCU Softball
 + Dashboards
   + Softball Stats
