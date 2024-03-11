@@ -3,36 +3,21 @@ import requests
 from bs4 import BeautifulSoup
 import re
 import pandas as pd
+import sqlalchemy
 
-def dict_to_csv(filename, aList):
+def load_df(df, table, conn_wh):
         '''
-        dict_to_csv converts a list of list to a comma separated values file
-        :param filename: string representing desired filename with extension .csv
-        :param aList: list of lists representing dataframe to be converted
+        load_df uploads a dataframe to postgreSQL database
+        :param df: dataframe to be loaded to SQL database
+        :param table: string representing table name where the data will be stored
+        :param conn_wh: string representing the desired database warehouse name
         :return: None
         ''' 
-        #store file to the desired location
-        rel_path = "./battlebots/data/"+filename
-        #create dataframe and convert to csv
-        pd.DataFrame(aList).to_csv(rel_path, sep=';')
+        conn = f'postgresql://repl:password@localhost:5432/{conn_wh}'
+        db_engine = sqlalchemy.create_engine(conn)
+        #create dataframe and convert to sql database
+        df.to_sql(name=table, con=db_engine, if_exists='replace')
         return
-
-
-def list_to_csv(filename, aList):
-        '''
-        list_to_csv converts a list of strings to a comma separated values file
-        :param filename: string representing desired filename with extension .csv
-        :param aList: list of strings representing the csv lines
-        :return: None
-        ''' 
-        #store file to the desired location
-        rel_path = "./battlebots/data/"+filename
-        #open file in write mode
-        with open(rel_path, "w") as file: 
-            file.writelines(aList)
-            file.close()
-        return
-
 
 def robot_links():
         '''
@@ -69,39 +54,59 @@ def remove_newlines(string):
         string = re.sub('\xa0', '', string)
         return string
 
-dict_links = robot_links()
 
-lst_infos = []
-df = pd.DataFrame(index=['Total matches', 'Win percentage', 'Total wins', 'Losses', 'Knockouts', 'KO percentage', 'Average knockout time', 'Knockouts against', 'KO against percentage', 'Judges decision wins'])
+def extract_info():
+        '''
+        extract_info collects robot and team information from the battlebots website
+        :return: dataframe of all robot/team information
+        '''
+        dict_links = robot_links()
+        lst_infos = []
+        
+        for i, v in dict_links.items():  
+            r = requests.get(v[0], verify=False)
+            #get robot info
+            html_info = BeautifulSoup(r.text.encode('utf-8'), features="html.parser").find_all('div',  {'class':'info-grid--item'})
+            extracted = [remove_newlines(x.get_text()) for x in html_info] 
+            #store bot and team info
+            lst_infos.append(dict([re.split(':\n|[:]$', x) for x in extracted[2:-3]]))
 
-for i, v in dict_links.items():  
-    r = requests.get(v[0], verify=False)
-    #get robot info
-    html_info = BeautifulSoup(r.text.encode('utf-8'), features="html.parser").find_all('div',  {'class':'info-grid--item'})
-    extracted = [remove_newlines(x.get_text()) for x in html_info] 
-    #store bot and team info
-    lst_infos.append(dict([re.split(':\n|[:]$', x) for x in extracted[2:-3]]))
-    #get stat table aka html_tables[0]
-    html_tables = BeautifulSoup(r.text.encode('utf-8'), features="html.parser").find_all('table')
-    
-    if html_tables != []:
-        table_head = html_tables[0].find_all('th')
-        clsses = [' '.join(f['class']) for f in table_head]
-        #customize dataframe header for each robot to include bot's name
-        headr = [x.get_text().lower() if table_head.index(x) == 0 else f'{re.split('\s\(',i)[0]}_{x.get_text().lower()}' for x in table_head]
-        #create empty dataframe for robot with table header
-        df_bot = pd.DataFrame(columns= headr) 
-        #ensure code is only looking at match stats and not match history
-        if headr[0] == 'stats':
-            for i in html_tables[0].find_all('tr')[1:]:
-                #store all the data for the current row
-                row = [item.get_text() for c in clsses for item in i.find_all('td', attrs={'class': c})]
-                df_row = pd.DataFrame([row], columns=headr) 
-                #add current row dataframe to current robot dataframe
-                df_bot = pd.concat([df_bot, df_row], ignore_index=True)
-            df_bot.set_index('stats', drop=True, inplace=True)
-        #add current robot dataframe to overall dataframe along the vertical axis
-        df = pd.concat([df, df_bot], axis=1)
-#create csvs from dataframes/dictionaries
-df.to_csv('./battlebots/data/stat-history-all.csv')
-dict_to_csv('robot-info.csv', lst_infos)
+        return pd.DataFrame(lst_infos)
+        
+def extract_stats():
+        '''
+        extract_stats collects robot and team information from the battlebots website
+        :return: dataframe of all robot/team information
+        '''
+        dict_links = robot_links()
+        df = pd.DataFrame(index=['Total matches', 'Win percentage', 'Total wins', 'Losses', 'Knockouts', 'KO percentage', 'Average knockout time', 'Knockouts against', 'KO against percentage', 'Judges decision wins'])
+
+        for i, v in dict_links.items():  
+            r = requests.get(v[0], verify=False)
+            #get stat table aka html_tables[0]
+            html_tables = BeautifulSoup(r.text.encode('utf-8'), features="html.parser").find_all('table')
+            
+            if html_tables != []:
+                table_head = html_tables[0].find_all('th')
+                clsses = [' '.join(f['class']) for f in table_head]
+                #customize dataframe header for each robot to include bot's name
+                headr = [x.get_text().lower() if table_head.index(x) == 0 else f'{re.split('\s\(',i)[0]}_{x.get_text().lower()}' for x in table_head]
+                #create empty dataframe for robot with table header
+                df_bot = pd.DataFrame(columns= headr) 
+                #ensure code is only looking at match stats and not match history
+                if headr[0] == 'stats':
+                    for i in html_tables[0].find_all('tr')[1:]:
+                        #store all the data for the current row
+                        row = [item.get_text() for c in clsses for item in i.find_all('td', attrs={'class': c})]
+                        df_row = pd.DataFrame([row], columns=headr) 
+                        #add current row dataframe to current robot dataframe
+                        df_bot = pd.concat([df_bot, df_row], ignore_index=True)
+                    df_bot.set_index('stats', drop=True, inplace=True)
+                #add current robot dataframe to overall dataframe along the vertical axis
+                df = pd.concat([df, df_bot], axis=1)
+        return df
+            
+#upload to sql database from dataframes/dictionaries
+load_df(extract_stats(), 'stats', 'battlebots')
+load_df(extract_info(), 'info', 'battlebots')
+
