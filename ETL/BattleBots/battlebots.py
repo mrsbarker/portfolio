@@ -4,6 +4,7 @@ from bs4 import BeautifulSoup
 import re
 import pandas as pd
 import sqlalchemy
+import psycopg2
 
 def load_df(df, table, conn_wh):
         '''
